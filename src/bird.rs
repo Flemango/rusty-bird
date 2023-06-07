@@ -5,8 +5,10 @@ use ggez::glam::Vec2;
 
 use nalgebra as na;
 
+use crate::INIT_SCREEN_HEIGHT;
+use crate::INIT_SCREEN_WIDTH;
 use crate::SCALE;
-use crate::SCREEN_HEIGHT;
+//use crate::SCREEN_HEIGHT;
 
 pub struct Bird {
     pub position: Vec2,
@@ -17,8 +19,8 @@ pub struct Bird {
 }
 
 pub fn initiate_player(sprite_path: Image) -> Bird {
-    let x: f32 = 200.0;
-    let y: f32 = (unsafe{SCREEN_HEIGHT})/2.-128.;
+    let x: f32 = INIT_SCREEN_WIDTH/4.;
+    let y: f32 = INIT_SCREEN_HEIGHT/3.;
 
     let spr_bird: Image = sprite_path;//Image::from_path(ctx, "/bird.png")?;
 

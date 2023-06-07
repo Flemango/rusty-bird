@@ -1,10 +1,13 @@
 use ggez::{audio::Source,Context};
 use ggez::audio::SoundSource;
+
 use rand::distributions::OpenClosed01;
 use rand::{thread_rng, Rng};
 use Source as src;
 
+
 pub struct Player {
+    pub muted: bool,
     pub begin_snd: Source,
     pub jump_snd: Source,
     pub score_snd: Source,
@@ -19,6 +22,7 @@ impl Player {
         let ouch_snd: Source =  src::new(ctx, "/ouch.wav").unwrap();
 
         Self {
+            muted: false,
             begin_snd,
             jump_snd,
             score_snd,
@@ -27,24 +31,28 @@ impl Player {
     }
 
     pub fn begin(&mut self, ctx: &mut Context) {
-        self.begin_snd.play_detached(ctx).ok();
+        if !self.muted {self.begin_snd.play_detached(ctx).ok();}
     }
 
     pub fn jump(&mut self, ctx: &mut Context) {
-        let pitch: f32 = thread_rng().sample(OpenClosed01);
-        self.score_snd.set_pitch(1.0 - pitch);
+        if !self.muted {
+            let pitch: f32 = thread_rng().sample(OpenClosed01);
+            self.jump_snd.set_pitch(1.0 + pitch);
 
-        self.jump_snd.play_detached(ctx).ok();
+            self.jump_snd.play_detached(ctx).ok();
+        }
     }
 
     pub fn ouch(&mut self, ctx: &mut Context) {
-        self.ouch_snd.play_detached(ctx).ok();
+        if !self.muted {self.ouch_snd.play_detached(ctx).ok();}
     }
 
     pub fn score(&mut self, ctx: &mut Context) {
-        let pitch: f32 = thread_rng().sample(OpenClosed01);
-        self.score_snd.set_pitch(1.0 + pitch);
+        if !self.muted {
+            let pitch: f32 = thread_rng().sample(OpenClosed01);
+            self.score_snd.set_pitch(1.0 + pitch);
 
-        self.score_snd.play_detached(ctx).ok();
+            self.score_snd.play_detached(ctx).ok();
+        }
     }
 }

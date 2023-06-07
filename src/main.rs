@@ -1,5 +1,5 @@
 
-use ggez::event::{self, EventHandler};
+use ggez::event::{self, EventHandler, MouseButton};
 use ggez::glam::*;
 use ggez::graphics::{self, Color, TextAlign, TextLayout};
 use ggez::conf;
@@ -13,6 +13,8 @@ use winapi::um::winuser::*;
 
 use std::env;
 use std::path;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 mod bird;
 use bird::Bird;
@@ -43,6 +45,45 @@ const PIPE_GAP: f32 = 200.0;
 const PIPE_WIDTH: f32 = 86.0;
 const PIPE_FREQ: f32 = 96.0;
 
+pub struct MuteBtn {
+    sprite1: graphics::Image,
+    sprite2: graphics::Image,
+    position: Vec2,
+    size: Vec2,
+}
+
+impl MuteBtn {
+    fn new(ctx: &mut Context) -> Self {
+        let sprite1 = graphics::Image::from_path(ctx, "/btn.png").unwrap();
+        let sprite2 = graphics::Image::from_path(ctx, "/btn-muted.png").unwrap();
+        //let sprite2 = graphics::Image::from_path(ctx, "/btn-muted.png").unwrap();
+
+        let w: f32 = sprite1.width() as f32;
+        let h: f32 = sprite1.height() as f32;
+
+        //let mut sprite = Vec::new();
+        //sprite.push(sprite);
+        //sprite.push(sprite);
+
+        let position = Vec2::new(16., 16.);
+
+        let mutebtn = Self {
+            sprite1,
+            sprite2,
+            position,
+            size: Vec2::new(w, h),
+        };
+
+        return mutebtn;
+    }
+}
+
+struct Mouse {
+    pos_x: f32,
+    pos_y: f32,
+    mouse_down: bool,
+}
+
 struct MyGame {
     bird: Bird,
     pipes: Vec<Pipe>,
@@ -55,6 +96,8 @@ struct MyGame {
     sound_player: audio::Player,
     window_size: PhysicalSize<u32>,
     fullscreen: bool, 
+    mute_btn: MuteBtn,
+    mouse: Mouse,
 }
 
 //------------------------------------------------------------------
@@ -66,14 +109,28 @@ impl MyGame {
         //init player
         let spr_bird = graphics::Image::from_path(ctx, "/bird.png")?;
         let bird: Bird = initiate_player(spr_bird);
-        
+
         ctx.gfx.add_font(
             "font_regular",
             graphics::FontData::from_path(ctx, "/font.ttf")?,
         );
+        ctx.gfx.add_font(
+            "font_logo",
+            graphics::FontData::from_path(ctx, "/logo.ttf")?,
+        );
 
         let sound_player: Player = Player::new(ctx);
         let bg = graphics::Image::from_path(ctx, "/bg.png")?;
+
+        let spr_btn = graphics::Image::from_path(ctx, "/btn.png")?;
+        let spr_btnmute = graphics::Image::from_path(ctx, "/btn-muted.png")?;
+        let mute_btn = MuteBtn::new(ctx);
+
+        let mouse = Mouse {
+            pos_x: 100.0,
+            pos_y: 100.0,
+            mouse_down: false,
+        };
 
         let s = MyGame {
             bird,
@@ -87,6 +144,8 @@ impl MyGame {
             sound_player,
             window_size: PhysicalSize::new(INIT_SCREEN_WIDTH as u32, INIT_SCREEN_HEIGHT as u32),
             fullscreen: false,
+            mute_btn,
+            mouse,
         };
 
         Ok(s)
@@ -165,7 +224,12 @@ impl EventHandler for MyGame
     // -----------------------------------------------------------------
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         while ctx.time.check_update_time(DESIRED_FPS) {
-            if self.start {
+            if !self.start {
+
+                self.bird.position.x = (unsafe{SCREEN_WIDTH})/4.;
+                self.bird.position.y = (unsafe{SCREEN_HEIGHT})/2.;
+
+            } else {
                 // player movement handling
                 self.player_update();
 
@@ -196,14 +260,22 @@ impl EventHandler for MyGame
 
         canvas.draw(
             &self.bg, graphics::DrawParam::new()
-            .offset(Vec2::new(0.5, 0.5))
+            .offset(Vec2::new(0.5, 0.45))
             .dest(Vec2::new(unsafe{SCREEN_HEIGHT/2.},unsafe{SCREEN_HEIGHT/2.}))
             .scale(scale),
         );
 
+        let logo_text = graphics::Text::new("RUSTY BIRD")
+            .set_font("font_logo")
+            .set_scale(64.)
+            .set_layout(TextLayout {
+                h_align: TextAlign::Middle,
+                v_align: TextAlign::Middle})
+            .clone();
+
         let start_text = graphics::Text::new("Press Enter/Space to start!\nUse Space to jump.")
             .set_font("font_regular")
-            .set_scale(48.)
+            .set_scale(24.)
             .set_layout(TextLayout {
                 h_align: TextAlign::Middle,
                 v_align: TextAlign::Middle})
@@ -212,15 +284,15 @@ impl EventHandler for MyGame
         let score_str: String = format!("Score: {}", self.score);
         let score_text = graphics::Text::new(score_str)
             .set_font("font_regular")
-            .set_scale(48.)
+            .set_scale(16.)
             .set_layout(TextLayout {
                 h_align: TextAlign::Begin,
                 v_align: TextAlign::Begin})
             .clone();
 
-        let gameover_text = graphics::Text::new("Game Over.\nEnter to close the game")
+        let gameover_text = graphics::Text::new("Game Over.\nPress any key to close the game\n")
             .set_font("font_regular")
-            .set_scale(48.)
+            .set_scale(24.)
             .set_layout(TextLayout {
                 h_align: TextAlign::Middle,
                 v_align: TextAlign::Middle})
@@ -258,14 +330,34 @@ impl EventHandler for MyGame
         if !self.start {
             canvas.draw(
                 &start_text,
-                graphics::DrawParam::from(vec2((unsafe{SCREEN_WIDTH})/2., (unsafe{SCREEN_HEIGHT})/2.))
-                    .color(Color::from((0, 0, 0, 255))),
+                graphics::DrawParam::from(vec2((unsafe{SCREEN_WIDTH})/2., (unsafe{SCREEN_HEIGHT/2.+SCREEN_HEIGHT/4.})))
+                    .color(Color::from((255, 255, 255, 255))),
             );
+            canvas.draw(
+                &logo_text,
+                graphics::DrawParam::from(vec2((unsafe{SCREEN_WIDTH})/2., (unsafe{SCREEN_HEIGHT})/3.))
+                    .color(Color::from((255, 0, 77, 255))),
+            );
+
+            if !self.sound_player.muted {
+                canvas.draw(
+                &self.mute_btn.sprite1,
+                graphics::DrawParam::new()
+                .dest(Vec2::new(16.,16.))
+                .scale(scale));
+            } else {
+                canvas.draw(
+                    &self.mute_btn.sprite2,
+                    graphics::DrawParam::new()
+                    .dest(Vec2::new(16.,16.))
+                    .scale(scale));
+            }
+
         } else {
             canvas.draw(
                 &score_text,
-                graphics::DrawParam::from(vec2(16., 16.))
-                    .color(Color::from((0, 0, 0, 255))),
+                graphics::DrawParam::from(vec2(16.,16.))
+                .color(Color::from((255, 255, 255, 255))),
             );
         }
 
@@ -280,6 +372,62 @@ impl EventHandler for MyGame
         canvas.finish(ctx)
     }
 
+    fn mouse_button_down_event(
+        &mut self,
+        _ctx: &mut Context,
+        button: MouseButton,
+        x: f32,
+        y: f32,
+    ) -> GameResult {
+        self.mouse.mouse_down = true;
+        //self.sound_player.muted = !self.sound_player.muted;
+        if !self.start {
+            if self.mouse.pos_x >= 16. &&
+            self.mouse.pos_x <= 64. &&
+            self.mouse.pos_y >= 16. &&
+            self.mouse.pos_y <= 64. {
+                self.sound_player.muted = !self.sound_player.muted;
+            }
+        }
+        // let btnx = self.mute_btn.position.x;
+        // let btny = self.mute_btn.position.y;
+        // let btnw = (self.mute_btn.position.x+self.mute_btn.size.x)*SCALE;
+        // let btnh = (self.mute_btn.position.y+self.mute_btn.size.y)*SCALE;//self.mute_btn.size.y;
+
+        // let testx = self.mouse.pos_x;
+        // let test = self.sound_player.muted;
+        // println!("Button x: {btnx}, y: {btny}, w: {btnw}, h: {btnh}");
+        // println!("Mouse button pressed: {button:?}, x: {testx}, y: {y}");
+        // println!("Muted: {test}");
+        Ok(())
+    }
+
+    fn mouse_motion_event(
+        &mut self,
+        _ctx: &mut Context,
+        x: f32,
+        y: f32,
+        xrel: f32,
+        yrel: f32,
+    ) -> GameResult {
+        
+            self.mouse.pos_x = x;
+            self.mouse.pos_y = y;
+        
+        Ok(())
+    }
+
+    fn mouse_button_up_event(
+        &mut self,
+        _ctx: &mut Context,
+        button: MouseButton,
+        x: f32,
+        y: f32,
+    ) -> GameResult {
+        self.mouse.mouse_down = false;
+        Ok(())
+    }
+
     fn key_down_event(
         &mut self,
         ctx: &mut Context,
@@ -287,16 +435,15 @@ impl EventHandler for MyGame
         _repeated: bool,
     ) -> GameResult {
 
-        //self.start = true;
+        if self.game_over {
+            ctx.request_quit();
+        }
+
         match input.keycode {
             Some(KeyCode::Return) => {
                 if !self.start {
                     self.start = true;
                     self.sound_player.begin(ctx);
-                }
-
-                if self.game_over {
-                    ctx.request_quit()
                 }
             }
 
